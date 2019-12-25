@@ -33,12 +33,17 @@ def get_bwt_array(s):
     Occ.append(list(Occ[len(bwt) - 1]))
     for i in range(len(Occ) - 1):
         Occ[i][dict1[bwt[i]]] -= 1
-    return bwt, C, Occ
+    return bwt, C, Occ, suffix_arr
 
 
 def lfc(r, c):
     c = dict1[c]
     return C[c] + Occ[r][c]
+
+
+def r_lfc(r, c):
+    c = dict1[c]
+    return r_C[c] + r_Occ[r][c]
 
 
 def exact_match(P):
@@ -48,10 +53,9 @@ def exact_match(P):
     :return:
     """
     p = len(P) - 1
-    c = dict1[P[p]]
-    sp = C[c]
-    ep = C[c + 1]
-    i = p - 1
+    sp = 0
+    ep = len(ref)
+    i = p
     while sp < ep and i >= 0:
         c = P[i]
         sp = lfc(sp, c)
@@ -61,31 +65,60 @@ def exact_match(P):
     return sp < ep
 
 
-def calculate_d(W):
-    print(r_ref)
-    k = 0
-    l = len(r_ref)
+def calculate_d(P):
+    ref_length = len(r_ref)
+    sp = 0
+    ep = ref_length
     z = 0
-    d = [0] * len(W)
-    for i in range(len(W)):
-        c = dict1[W[i]]
-        k = C[c] + rOcc[k][c]
-        l = C[c] + rOcc[l][c]
-        if k >= l:
-            k = 0
-            l = len(r_ref)
+    d = [0] * len(P)
+    for i in range(len(P)):
+        c = P[i]
+        sp = r_lfc(sp, c)
+        ep = r_lfc(ep, c)
+        if sp >= ep:
             z += 1
+            sp = 0
+            ep = ref_length
         d[i] = z
     return d
+
+
+def inex_recur(P, i, z, sp, ep):
+    print(i, z, sp, ep, P[i])
+    if i < 0:
+        return set([x for x in range(sp, ep)])
+    if z < d[i]:
+        return set()
+    s = set()
+    s = s | inex_recur(P, i-1, z-1, sp, ep)
+    spp, epp = sp, ep
+    for c in dict2[1:5]:
+        sp = lfc(sp, c)
+        ep = lfc(ep, c)
+        if sp < ep:
+            s = s | inex_recur(P, i, z-1, sp, ep)
+            if c == P[i]:
+                s = s | inex_recur(P, i-1, z, sp, ep)
+            elif P[i]:
+                s = s | inex_recur(P, i-1, z-1, sp, ep)
+        sp = spp
+        ep = epp
+    return s
+
+
+def inexact_search(P, z):
+    global d
+    d = calculate_d(P)
+    return inex_recur(P, len(P)-1, z, 0, len(ref))
 
 
 if __name__ == '__main__':
     # ref = loading.load_ref('NC_008253.fna') + '$'
     # reads1, reads2 = loading.load_reads('NC_008253_1.fastq', 'NC_008253_2.fastq')
-    ref = 'AGACAGA' + '$'
-    bwt, C, Occ = get_bwt_array(ref)
-    # print(exact_match('CTTG'))
-
+    ref = 'CCGCA' + '$'
+    bwt, C, Occ, sa = get_bwt_array(ref)
     r_ref = ref[-2::-1] + '$'
-    r_bwt, rC, rOcc = get_bwt_array(r_ref)
-    print(calculate_d('CGC'))
+    _, r_C, r_Occ, _ = get_bwt_array(r_ref)
+    pos = inexact_search('CGC', 1)
+    print(pos)
+    print([sa[x] for x in pos])
