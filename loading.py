@@ -17,6 +17,7 @@ def load_ref(file):
     '''
     data = load_file(file)
     return data[data.index('\n') + 1:].replace('\n', '').upper()
+    # [:100000]
 
 
 def load_reads(file1, file2, num=1000):
@@ -40,3 +41,97 @@ def load_reads(file1, file2, num=1000):
         reads1.append(data1[i * 4 + 1].upper())
         reads2.append(data2[i * 4 + 1].upper())
     return reads1, reads2
+
+
+def calculate_flag(pos_list1, pos_list2, pos_list3, pos_list4, number):
+    """
+    计算flag值
+    :param pos_list1: 测序片段1匹配到的位置list
+    :param pos_list2: 测序片段2匹配到的位置list
+    :param pos_list3: 测序片段3(1的互补反序序列)匹配到的位置list
+    :param pos_list4: 测序片段4(2的互补反序序列)匹配到的位置list
+    :param number: number=1时表示当前测试序列是测试序列1，否则当前测试序列是测试序列2
+    :return: flag值
+    """
+    flag = 1
+    if len(pos_list1) == 0:
+        flag += 4
+    if len(pos_list2) == 0:
+        flag += 8
+    if len(pos_list3) != 0:
+        flag += 16
+    if len(pos_list4) != 0:
+        flag += 32
+    if number == 1:
+        flag += 64
+    else:
+        flag += 128
+    return flag
+
+
+def getline(qname, flag, pos, pnext, seq, mapq='60', cigar='=', rname='NC_008253', tlen='0', qual='*'):
+    """
+    格式化一行信息
+    :param qname: 测序片段的名字
+    :param flag: 标志位
+    :param pos: 偏移位置
+    :param pnext: 另一个pair-end序列的偏移位置
+    :param seq: 基因序列
+    :param mapq: 质量分数
+    :param cigar: cigar值
+    :param rname: 参考序列名字
+    :param tlen: ISIZE值
+    :param qual: read质量的ASCII编码
+    :return: 格式化后的一行字符串
+    """
+    return qname + '\t' + str(flag) + '\t' + rname + '\t' + str(pos) + '\t' + mapq + '\t' + cigar + '\t' \
+           + rname + '\t' + str(pnext) + '\t' + tlen + '\t' + seq + '\t' + qual + '\n'
+
+
+def write_line(pos_list1, pos_list2, fp, read_name, flag, seq):
+    """
+    写入文件的一行
+    :param pos_list1: 测序片段1匹配到的位置list
+    :param pos_list2: 测序片段2匹配到的位置list
+    :param fp: 文件
+    :param read_name: 测序片段名字
+    :param flag: 标志位
+    :param seq: 测序片段
+    :return: None
+    """
+    pnext = 0 if len(pos_list2) == 0 else pos_list2[0]
+    if len(pos_list1) != 0:
+        for pos in pos_list1:
+            fp.write(getline(qname=read_name, flag=flag, pos=pos, pnext=pnext, seq=seq))
+    else:
+        fp.write(getline(qname=read_name, flag=flag, pos=0, pnext=pnext, seq=seq))
+
+
+def write_head(file_name):
+    """
+    写入文件头部
+    :param file_name: 文件名
+    :return: None
+    """
+    with open(file_name, 'w') as fp:
+        fp.write('@HD VN:1.6 SO:coordinate' + '\n' + '@SQ SN:ref LN:45' + '\n')
+
+
+def write_sam(file_name, read_name, pos_list1, pos_list2,  pos_list3, pos_list4, read1, read2):
+    """
+    写入sam文件
+    :param file_name: 文件名
+    :param read_name: 测序片段名字
+    :param pos_list1: 测序片段1匹配到的位置list
+    :param pos_list2: 测序片段2匹配到的位置list
+    :param pos_list3: 测序片段3(1的互补反序序列)匹配到的位置list
+    :param pos_list4: 测序片段4(2的互补反序序列)匹配到的位置list
+    :param read1: 测序片段1
+    :param read2: 测序片段2
+    :return: None
+    """
+    with open(file_name, 'a') as fp:
+        flag1 = calculate_flag(pos_list1, pos_list2,  pos_list3, pos_list4, 1)
+        flag2 = calculate_flag(pos_list2, pos_list1,  pos_list4, pos_list3, 2)
+        write_line(pos_list1, pos_list2, fp, read_name, flag1, read1)
+        write_line(pos_list2, pos_list1, fp, read_name, flag2, read2)
